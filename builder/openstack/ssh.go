@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"github.com/mitchellh/multistep"
 	"github.com/rackspace/gophercloud"
-	"time"
+	"log"
+	"strings"
 )
 
 // SSHAddress returns a function that can be given to the SSH communicator
 // for determining the SSH address based on the server AccessIPv4 setting..
-func SSHAddress(csp gophercloud.CloudServersProvider, port int) func(multistep.StateBag) (string, error) {
+func SSHAddress(csp gophercloud.CloudServersProvider, port int, specify_ip_pool string) func(multistep.StateBag) (string, error) {
 	return func(state multistep.StateBag) (string, error) {
 		s := state.Get("server").(*gophercloud.Server)
 
@@ -24,12 +25,41 @@ func SSHAddress(csp gophercloud.CloudServersProvider, port int) func(multistep.S
 			return "", errors.New("Error parsing SSH addresses")
 		}
 		for pool, addresses := range ip_pools {
-			if pool != "" {
-				for _, address := range addresses {
-					if address.Addr != "" {
-						return fmt.Sprintf("%s:%d", address.Addr, port), nil
+			log.Printf("pool = %s", pool)
+			log.Printf("addresses = %s", addresses)
+			if specify_ip_pool != "" {
+					if pool == specify_ip_pool {
+							for _, address := range addresses {
+									if address.Addr != "" {
+									  if ! (strings.HasPrefix(address.Addr, "10.") ||
+									     strings.HasPrefix(address.Addr, "172.16.") ||
+									     strings.HasPrefix(address.Addr, "172.17.") ||
+									     strings.HasPrefix(address.Addr, "172.18.") ||
+									     strings.HasPrefix(address.Addr, "172.19.") ||
+									     strings.HasPrefix(address.Addr, "172.20.") ||
+									     strings.HasPrefix(address.Addr, "172.21.") ||
+									     strings.HasPrefix(address.Addr, "172.22.") ||
+									     strings.HasPrefix(address.Addr, "172.23.") ||
+									     strings.HasPrefix(address.Addr, "172.24.") ||
+									     strings.HasPrefix(address.Addr, "172.25.") ||
+									     strings.HasPrefix(address.Addr, "172.26.") ||
+									     strings.HasPrefix(address.Addr, "172.27.") ||
+									     strings.HasPrefix(address.Addr, "172.28.") ||
+									     strings.HasPrefix(address.Addr, "172.29.") ||
+									     strings.HasPrefix(address.Addr, "172.30.") ||
+									     strings.HasPrefix(address.Addr, "172.31.") ||
+									     strings.HasPrefix(address.Addr, "192.168.")) {
+											return fmt.Sprintf("%s:%d", address.Addr, port), nil
+									  }
+									}
+							}
 					}
-				}
+			} else if pool != "" {
+					for _, address := range addresses {
+							if address.Addr != "" {
+									return fmt.Sprintf("%s:%d", address.Addr, port), nil
+							}
+					}
 			}
 		}
 
@@ -40,7 +70,6 @@ func SSHAddress(csp gophercloud.CloudServersProvider, port int) func(multistep.S
 		}
 
 		state.Put("server", serverState)
-		time.Sleep(1 * time.Second)
 
 		return "", errors.New("couldn't determine IP address for server")
 	}
