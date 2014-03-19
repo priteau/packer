@@ -15,6 +15,7 @@ import (
 
 // StepCreateSSHKey represents a Packer build step that generates SSH key pairs.
 type StepCreateSSHKey struct {
+	Debug        bool
 	DebugKeyPath string
 }
 
@@ -45,43 +46,47 @@ func (s *StepCreateSSHKey) Run(state multistep.StateBag) multistep.StepAction {
 		return multistep.ActionHalt
 	}
 
-	tfpriv, err := ioutil.TempFile("", "packer-nimbus-privatekey")
-	if err != nil {
-		state.Put("error", fmt.Errorf("Error preparing private SSH key: %s", err))
-		return multistep.ActionHalt
+	if s.Debug {
+		ui.Message(fmt.Sprintf("Saving key for debug purposes: %s", s.DebugKeyPath))
+		f, err := os.Create(s.DebugKeyPath)
+		if err != nil {
+			state.Put("error", fmt.Errorf("Error saving debug key: %s", err))
+			return multistep.ActionHalt
+		}
+
+		// Write out the key
+		err = pem.Encode(f, &priv_blk)
+		f.Close()
+		if err != nil {
+			state.Put("error", fmt.Errorf("Error saving debug key: %s", err))
+			return multistep.ActionHalt
+		}
 	}
 
-	ui.Message(fmt.Sprintf("Saving private key: %s", tfpriv.Name()))
-	// Write out the key
-	err = pem.Encode(tfpriv, &priv_blk)
-	tfpriv.Close()
-	if err != nil {
-		state.Put("error", fmt.Errorf("Error saving private SSH key: %s", err))
-		return multistep.ActionHalt
-	}
+	private_key := string(pem.EncodeToMemory(&priv_blk))
+	state.Put("privateKey", private_key)
 
-	tfpub, err := ioutil.TempFile("", "packer-nimbus-publickey")
+	// Write the public key in a temporary file
+	tf, err := ioutil.TempFile("", "packer-nimbus-publickey")
 	if err != nil {
 		state.Put("error", fmt.Errorf("Error preparing public SSH key: %s", err))
 		return multistep.ActionHalt
 	}
 
-	ui.Message(fmt.Sprintf("Saving public key: %s", tfpub.Name()))
+	ui.Message(fmt.Sprintf("Saving public key: %s", tf.Name()))
 	// Write out the key
-	_, err = tfpub.WriteString(string(ssh.MarshalAuthorizedKey(pub)))
-	tfpub.Close()
+	_, err = tf.WriteString(string(ssh.MarshalAuthorizedKey(pub)))
+	tf.Close()
 	if err != nil {
 		state.Put("error", fmt.Errorf("Error saving public SSH key: %s", err))
 		return multistep.ActionHalt
 	}
 
-	state.Put("ssh_private_key", tfpriv.Name())
-	state.Put("ssh_public_key", tfpub.Name())
+	state.Put("ssh_public_key", tf.Name())
 	return multistep.ActionContinue
 }
 
 // Clean up temporary SSH keys
 func (s *StepCreateSSHKey) Cleanup(state multistep.StateBag) {
-	os.Remove(state.Get("ssh_private_key").(string))
 	os.Remove(state.Get("ssh_public_key").(string))
 }

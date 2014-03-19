@@ -9,7 +9,6 @@ import (
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -36,7 +35,14 @@ type config struct {
 
 	// Nimbus Cloud Client configuration
 	CloudClientPath string `mapstructure:"cloud_client_path"`
-	PrivateSSHKey string `mapstructure:"private_ssh_key"`
+	Factory string `mapstructure:"factory"`
+	Repository string `mapstructure:"repository"`
+	FactoryIdentity string `mapstructure:"factory_identity"`
+	S3Id string `mapstructure:"s3id"`
+	S3Key string `mapstructure:"s3key"`
+	CanonicalId string `mapstructure:"canonicalid"`
+	Cert string `mapstructure:"cert"`
+	Key string `mapstructure:"key"`
 
 	PackerDebug   bool   `mapstructure:"packer_debug"`
 	RawSSHTimeout string `mapstructure:"ssh_timeout"`
@@ -72,8 +78,36 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, error) {
 		errs = append(errs, errors.New("A source_image must be specified"))
 	}
 
-	if b.config.Cloud == "" {
-		errs = append(errs, errors.New("A cloud must be specified"))
+	if b.config.Factory == "" {
+		errs = append(errs, errors.New("A factory must be specified"))
+	}
+
+	if b.config.Repository == "" {
+		errs = append(errs, errors.New("A repository must be specified"))
+	}
+
+	if b.config.FactoryIdentity == "" {
+		errs = append(errs, errors.New("A factory_identity must be specified"))
+	}
+
+	if b.config.S3Id == "" {
+		errs = append(errs, errors.New("An s3id must be specified"))
+	}
+
+	if b.config.S3Key == "" {
+		errs = append(errs, errors.New("A s3key must be specified"))
+	}
+
+	if b.config.CanonicalId == "" {
+		errs = append(errs, errors.New("A canonicalid must be specified"))
+	}
+
+	if b.config.Cert == "" {
+		errs = append(errs, errors.New("A cert must be specified"))
+	}
+
+	if b.config.Key == "" {
+		errs = append(errs, errors.New("A key must be specified"))
 	}
 
 	if b.config.SSHUsername == "" {
@@ -98,10 +132,6 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, error) {
 		errs = append(errs, errors.New("The path to the cloud client installation must be specified"))
 	}
 
-	if b.config.PrivateSSHKey == "" {
-		errs = append(errs, errors.New("The path to your private SSH key must be specified"))
-	}
-
 	if len(errs) > 0 {
 		return nil, &packer.MultiError{errs}
 	}
@@ -111,22 +141,6 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, error) {
 }
 
 func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packer.Artifact, error) {
-	cloud_conf_path := filepath.Join(b.config.CloudClientPath, "conf", "clouds", fmt.Sprintf("%s.conf", b.config.Cloud))
-	if _, err := os.Stat(cloud_conf_path); os.IsNotExist(err) {
-		panic(fmt.Sprintf("no such file or directory: %s", cloud_conf_path))
-	}
-
-	tf, err := ioutil.TempFile("", "packer-nimbus-cloudconf")
-	if err != nil {
-		panic(fmt.Sprintf("Error preparing cloud config file: %s", err))
-	}
-	defer os.Remove(tf.Name())
-
-	cpCmd := fmt.Sprintf("cp %s %s", cloud_conf_path, tf.Name())
-	exec.Command("/bin/sh", "-c", cpCmd).Run()
-
-	log.Printf("cloud config path: %s", tf.Name())
-
 	cloud_client_command_path := filepath.Join(b.config.CloudClientPath, "bin", "cloud-client.sh")
 	cloud_client_command, err := exec.LookPath(cloud_client_command_path)
 	if err != nil {
@@ -135,24 +149,17 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 
 	log.Printf("cloud client command path: %s", cloud_client_command_path)
 
-	contents, err := ioutil.ReadFile(b.config.PrivateSSHKey)
-	if err != nil {
-		panic(fmt.Sprintf("failed to read private SSH key at %s", b.config.PrivateSSHKey))
-	}
-	private_key := string(contents)
-
 	// Setup the state bag and initial state for the steps
 	state := new(multistep.BasicStateBag)
 	state.Put("config", b.config)
-	state.Put("cloud_conf_path", tf.Name())
 	state.Put("cloud_client_command", cloud_client_command)
 	state.Put("hook", hook)
-	state.Put("privateKey", private_key)
 	state.Put("ui", ui)
 
 	// Build the steps
 	steps := []multistep.Step{
 		&StepCreateSSHKey{
+			Debug:        b.config.PackerDebug,
 			DebugKeyPath: fmt.Sprintf("nimbus_%s.pem", b.config.PackerBuildName),
 		},
 		&stepRunSourceInstance{},
@@ -161,7 +168,7 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 			SSHConfig:      sshConfig,
 			SSHWaitTimeout: b.config.sshTimeout,
 		},
-		&stepProvision{},
+		&common.StepProvision{},
 		&stepCreateImage{},
 	}
 
@@ -176,6 +183,9 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 	}
 
 	b.runner.Run(state)
+
+	cloud_conf_path := state.Get("cloud_conf_path").(string)
+	os.Remove(cloud_conf_path)
 
 	// If there was an error, return that
 	if rawErr, ok := state.GetOk("error"); ok {
