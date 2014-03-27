@@ -100,7 +100,7 @@ func (s *stepRunSourceInstance) Cleanup(state multistep.StateBag) {
 
 	ui := state.Get("ui").(packer.Ui)
 
-	if state.Get("image") != "" {
+	if _, ok := state.GetOk("image"); ok {
 		ui.Say("Nimbus instance already terminated by image creation...")
 		return
 	}
