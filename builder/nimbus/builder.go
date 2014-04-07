@@ -43,6 +43,7 @@ type config struct {
 	CanonicalId string `mapstructure:"canonicalid"`
 	Cert string `mapstructure:"cert"`
 	Key string `mapstructure:"key"`
+	MountAs string `mapstructure:"mount_as"`
 
 	PackerDebug   bool   `mapstructure:"packer_debug"`
 	RawSSHTimeout string `mapstructure:"ssh_timeout"`

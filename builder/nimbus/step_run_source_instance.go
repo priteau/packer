@@ -32,6 +32,7 @@ vws.repository.s3key={{.S3Key}}
 vws.repository.canonicalid={{.CanonicalId}}
 nimbus.cert={{.Cert}}
 nimbus.key={{.Key}}
+{{if .MountAs}}vws.metadata.mountAs={{.MountAs}}{{end}}
 `
 
 func (s *stepRunSourceInstance) Run(state multistep.StateBag) multistep.StepAction {
@@ -58,13 +59,15 @@ func (s *stepRunSourceInstance) Run(state multistep.StateBag) multistep.StepActi
 	ui.Say("Launching a source Nimbus instance...")
 
 	var stdout bytes.Buffer
+	var stderr bytes.Buffer
 	ssh_public_key := state.Get("ssh_public_key").(string)
 	cmd := exec.Command(cloud_client_command, "--conf", cloud_conf_path.Name(), "--run", "--hours", "1", "--name", config.SourceImage, "--ssh-pubkey", ssh_public_key)
 	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	log.Println("Executing command: ", cmd.Args)
 	if err := cmd.Run(); err != nil {
-		err := fmt.Errorf("Error launching source instance: %s", err)
+		err := fmt.Errorf("Error launching source instance: %s\n\nStdout: %s\n\nStderr: %s", err, stdout, stderr)
 		state.Put("error", err)
 		ui.Error(err.Error())
 		return multistep.ActionHalt
