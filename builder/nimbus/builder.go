@@ -166,7 +166,7 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 		&stepRunSourceInstance{},
 		&common.StepConnectSSH{
 			SSHAddress:     sshAddress,
-			SSHConfig:      sshConfig,
+			SSHConfig:      SSHConfig(b.config.SSHUsername),
 			SSHWaitTimeout: b.config.sshTimeout,
 		},
 		&common.StepProvision{},
