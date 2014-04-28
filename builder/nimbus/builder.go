@@ -5,7 +5,6 @@ package nimbus
 import (
 	"errors"
 	"fmt"
-	"github.com/mitchellh/mapstructure"
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
@@ -13,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"text/template"
 	"time"
 )
 
@@ -21,32 +19,34 @@ import (
 const BuilderId = "nimbusproject.nimbus"
 
 type config struct {
-	common.PackerConfig    `mapstructure:",squash"`
+	common.PackerConfig `mapstructure:",squash"`
 
 	// Information for the source instance
-	Cloud        string
-	SourceImage  string `mapstructure:"source_image"`
-	SSHUsername  string `mapstructure:"ssh_username"`
-	SSHPort      int    `mapstructure:"ssh_port"`
-	sshTimeout   time.Duration
+	Cloud       string
+	SourceImage string `mapstructure:"source_image"`
+	SSHUsername string `mapstructure:"ssh_username"`
+	SSHPort     int    `mapstructure:"ssh_port"`
+	sshTimeout  time.Duration
 
 	// Configuration of the resulting image
 	ImageName string `mapstructure:"image_name"`
 
 	// Nimbus Cloud Client configuration
 	CloudClientPath string `mapstructure:"cloud_client_path"`
-	Factory string `mapstructure:"factory"`
-	Repository string `mapstructure:"repository"`
+	Factory         string `mapstructure:"factory"`
+	Repository      string `mapstructure:"repository"`
 	FactoryIdentity string `mapstructure:"factory_identity"`
-	S3Id string `mapstructure:"s3id"`
-	S3Key string `mapstructure:"s3key"`
-	CanonicalId string `mapstructure:"canonicalid"`
-	Cert string `mapstructure:"cert"`
-	Key string `mapstructure:"key"`
-	MountAs string `mapstructure:"mount_as"`
+	S3Id            string `mapstructure:"s3id"`
+	S3Key           string `mapstructure:"s3key"`
+	CanonicalId     string `mapstructure:"canonicalid"`
+	Cert            string `mapstructure:"cert"`
+	Key             string `mapstructure:"key"`
+	MountAs         string `mapstructure:"mount_as"`
 
 	PackerDebug   bool   `mapstructure:"packer_debug"`
 	RawSSHTimeout string `mapstructure:"ssh_timeout"`
+
+	tpl *packer.ConfigTemplate
 }
 
 type Builder struct {
@@ -55,15 +55,18 @@ type Builder struct {
 }
 
 func (b *Builder) Prepare(raws ...interface{}) ([]string, error) {
-	var err error
-
-	for _, raw := range raws {
-		err := mapstructure.Decode(raw, &b.config)
-		if err != nil {
-			return nil, err
-		}
+	md, err := common.DecodeConfig(&b.config, raws...)
+	if err != nil {
+		return nil, err
 	}
 
+	b.config.tpl, err = packer.NewConfigTemplate()
+	if err != nil {
+		return nil, err
+	}
+	b.config.tpl.UserVars = b.config.PackerUserVars
+
+	// Defaults
 	if b.config.SSHPort == 0 {
 		b.config.SSHPort = 22
 	}
@@ -73,68 +76,77 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, error) {
 	}
 
 	// Accumulate any errors
-	errs := make([]error, 0)
+	errs := common.CheckUnusedConfig(md)
 
 	if b.config.SourceImage == "" {
-		errs = append(errs, errors.New("A source_image must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("A source_image must be specified"))
 	}
 
 	if b.config.Factory == "" {
-		errs = append(errs, errors.New("A factory must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("A factory must be specified"))
 	}
 
 	if b.config.Repository == "" {
-		errs = append(errs, errors.New("A repository must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("A repository must be specified"))
 	}
 
 	if b.config.FactoryIdentity == "" {
-		errs = append(errs, errors.New("A factory_identity must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("A factory_identity must be specified"))
 	}
 
 	if b.config.S3Id == "" {
-		errs = append(errs, errors.New("An s3id must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("An s3id must be specified"))
 	}
 
 	if b.config.S3Key == "" {
-		errs = append(errs, errors.New("A s3key must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("A s3key must be specified"))
 	}
 
 	if b.config.CanonicalId == "" {
-		errs = append(errs, errors.New("A canonicalid must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("A canonicalid must be specified"))
 	}
 
 	if b.config.Cert == "" {
-		errs = append(errs, errors.New("A cert must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("A cert must be specified"))
 	}
 
 	if b.config.Key == "" {
-		errs = append(errs, errors.New("A key must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("A key must be specified"))
 	}
 
 	if b.config.SSHUsername == "" {
-		errs = append(errs, errors.New("An ssh_username must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("An ssh_username must be specified"))
 	}
 
 	b.config.sshTimeout, err = time.ParseDuration(b.config.RawSSHTimeout)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("Failed parsing ssh_timeout: %s", err))
+		errs = packer.MultiErrorAppend(errs, fmt.Errorf("Failed parsing ssh_timeout: %s", err))
 	}
 
 	if b.config.ImageName == "" {
-		errs = append(errs, errors.New("image_name must be specified"))
-	} else {
-		_, err = template.New("image").Parse(b.config.ImageName)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("Failed parsing image_name: %s", err))
-		}
+		errs = packer.MultiErrorAppend(errs, errors.New("image_name must be specified"))
 	}
 
 	if b.config.CloudClientPath == "" {
-		errs = append(errs, errors.New("The path to the cloud client installation must be specified"))
+		errs = packer.MultiErrorAppend(errs, errors.New("The path to the cloud client installation must be specified"))
 	}
 
-	if len(errs) > 0 {
-		return nil, &packer.MultiError{errs}
+	templates := map[string]*string{
+		"image_name":   &b.config.ImageName,
+		"source_image": &b.config.SourceImage,
+	}
+
+	for n, ptr := range templates {
+		var err error
+		*ptr, err = b.config.tpl.Process(*ptr, nil)
+		if err != nil {
+			errs = packer.MultiErrorAppend(
+				errs, fmt.Errorf("Error processing %s: %s", n, err))
+		}
+	}
+
+	if errs != nil && len(errs.Errors) > 0 {
+		return nil, errs
 	}
 
 	log.Printf("Config: %+v", b.config)

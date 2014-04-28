@@ -1,9 +1,8 @@
 package nimbus
 
 import (
-	gossh "code.google.com/p/gosshold/ssh"
+	gossh "code.google.com/p/go.crypto/ssh"
 	"fmt"
-	"github.com/mitchellh/packer/communicator/ssh"
 	"github.com/mitchellh/multistep"
 )
 
@@ -20,15 +19,15 @@ func SSHConfig(username string) func(multistep.StateBag) (*gossh.ClientConfig, e
 	return func(state multistep.StateBag) (*gossh.ClientConfig, error) {
 		privateKey := state.Get("privateKey").(string)
 
-		keyring := new(ssh.SimpleKeychain)
-		if err := keyring.AddPEMKey(privateKey); err != nil {
+			signer, err := gossh.ParsePrivateKey([]byte(privateKey))
+			if err != nil {
 			return nil, fmt.Errorf("Error setting up SSH config: %s", err)
 		}
 
 		return &gossh.ClientConfig{
 			User: username,
-			Auth: []gossh.ClientAuth{
-				gossh.ClientAuthKeyring(keyring),
+			Auth: []gossh.AuthMethod{
+				gossh.PublicKeys(signer),
 			},
 		}, nil
 	}
