@@ -1,0 +1,27 @@
+{
+  "variables": {
+    "s3id": null,
+    "s3key": null,
+    "canonicalid": null,
+    "cert": null,
+    "key": null,
+    "cloud_client_path": null
+  },
+  "builders": [
+    {
+      "type": "nimbus",
+      "factory": "svc.uc.futuregrid.org:8443",
+      "repository": "svc.uc.futuregrid.org:8888",
+      "factory_identity": "/DC=FUTUREGRID/DC=ORG/O=Indiana University/OU=FutureGrid/CN=svc.uc.futuregrid.org",
+      "source_image": "hello-cloud2",
+      "ssh_username": "root",
+      "image_name": "packerbats-hotel-{{timestamp}}",
+      "s3id": "{{user `s3id`}}",
+      "s3key": "{{user `s3key`}}",
+      "canonicalid": "{{user `canonicalid`}}",
+      "cert": "{{user `cert`}}",
+      "key": "{{user `key`}}",
+      "cloud_client_path": "{{user `cloud_client_path`}}"
+    }
+  ]
+}

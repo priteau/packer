@@ -1,0 +1,28 @@
+{
+  "variables": {
+    "s3id": null,
+    "s3key": null,
+    "canonicalid": null,
+    "cert": null,
+    "key": null,
+    "cloud_client_path": null
+  },
+  "builders": [
+    {
+      "type": "nimbus",
+      "factory": "nimbus.futuregrid.tacc.utexas.edu:8443",
+      "repository": "nimbus.futuregrid.tacc.utexas.edu:8888",
+      "factory_identity": "/C=US/2.5.4.17=78711/ST=TX/L=Austin/2.5.4.9=1 University Station/O=The University of Texas at Austin/OU=TACC - Texas Advanced Computing Center/CN=nimbus.futuregrid.tacc.utexas.edu",
+      "source_image": "ubuntu10.10.gz",
+      "ssh_username": "root",
+      "image_name": "packerbats-alamo-{{timestamp}}",
+      "mount_as": "hda",
+      "s3id": "{{user `s3id`}}",
+      "s3key": "{{user `s3key`}}",
+      "canonicalid": "{{user `canonicalid`}}",
+      "cert": "{{user `cert`}}",
+      "key": "{{user `key`}}",
+      "cloud_client_path": "{{user `cloud_client_path`}}"
+    }
+  ]
+}

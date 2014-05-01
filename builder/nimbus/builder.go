@@ -134,6 +134,12 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, error) {
 	templates := map[string]*string{
 		"image_name":   &b.config.ImageName,
 		"source_image": &b.config.SourceImage,
+		"s3id": &b.config.S3Id,
+		"s3key": &b.config.S3Key,
+		"canonicalid": &b.config.CanonicalId,
+		"cert": &b.config.Cert,
+		"key": &b.config.Key,
+		"cloud_client_path": &b.config.CloudClientPath,
 	}
 
 	for n, ptr := range templates {
