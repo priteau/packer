@@ -38,7 +38,11 @@ func (s *stepCreateImage) Run(state multistep.StateBag) multistep.StepAction {
 	ui.Say(fmt.Sprintf("Creating the image: %s", imageName))
 
 	var stdout bytes.Buffer
-	cmd := exec.Command(cloud_client_command, "--conf", cloud_conf_path, "--save", "--handle", instance_id, "--newname", config.ImageName)
+	args := []string{"--conf", cloud_conf_path, "--save", "--handle", instance_id, "--newname", config.ImageName}
+	if (config.PublicImage) {
+		args = append(args, "--common")
+	}
+	cmd := exec.Command(cloud_client_command, args...)
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
 		err := fmt.Errorf("Error creating the image: %s", err)

@@ -30,6 +30,7 @@ type config struct {
 
 	// Configuration of the resulting image
 	ImageName string `mapstructure:"image_name"`
+	PublicImage     bool   `mapstructure:"public_image"`
 
 	// Nimbus Cloud Client configuration
 	CloudClientPath string `mapstructure:"cloud_client_path"`
