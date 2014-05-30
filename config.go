@@ -25,6 +25,7 @@ const defaultConfig = `
 		"digitalocean": "packer-builder-digitalocean",
 		"docker": "packer-builder-docker",
 		"googlecompute": "packer-builder-googlecompute",
+		"nimbus": "packer-builder-nimbus",
 		"openstack": "packer-builder-openstack",
 		"qemu": "packer-builder-qemu",
 		"virtualbox-iso": "packer-builder-virtualbox-iso",
